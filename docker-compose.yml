@@ -1,0 +1,64 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: gcs_db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: academie
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      backend:
+
+  api:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: gcs_api
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - DB_HOST=db
+      - DB_USER=user
+      - DB_PASSWORD=userpassword
+      - DB_NAME=academie
+      - SECRET_KEY=super-secret-key-pour-le-dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./api:/app
+    depends_on:
+      - db
+    networks:
+      backend:
+      frontend:
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: gcs_client
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - VITE_API_URL=http://localhost:5000/api
+    depends_on:
+      - api
+    networks:
+      frontend:
+
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+
+volumes:
+  db_data:
