@@ -67,6 +67,7 @@ jobs:
           # Note: l'IP réseau par défaut du host depuis un conteneur docker sous Linux est souvent 172.17.0.1
           target: 'http://172.17.0.1:5173/'
           fail_action: false # Autoriser la pipeline à passer même s'il trouve des failles mineures au début
+          allow_issue_writing: false
           
       - name: Nettoyage et arrêt
         if: always()
