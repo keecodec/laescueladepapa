@@ -54,4 +54,4 @@ def health_check():
 
 if __name__ == '__main__':
     # Ne jamais utiliser debug=True en production !
-    app.run(host='0.0.0.0', port=5000)
+    app.run(port=5000)
