@@ -4,14 +4,14 @@ import { FileText, Check, AlertCircle, Calendar } from 'lucide-react';
 
 export default function ProfHomework() {
     const [classes, setClasses] = useState([]);
-    const [form, setForm] = useState({ class_id: '', date_due: '', content: '' });
+    const [form, setForm] = useState({ assignment_id: '', date_due: '', content: '' });
     const [msg, setMsg] = useState(null);
     const [err, setErr] = useState(null);
 
     useEffect(() => {
         api.get('/professor/classes').then(res => {
             setClasses(res.data);
-            if(res.data.length > 0) setForm(f => ({...f, class_id: res.data[0].id}));
+            if(res.data.length > 0) setForm(f => ({...f, assignment_id: res.data[0].assignment_id}));
         }).catch(e => console.error(e));
     }, []);
 
@@ -45,8 +45,8 @@ export default function ProfHomework() {
                 <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
                     <div className="input-group">
                         <label className="input-label">Classe Ciblée / Groupe d'élèves</label>
-                        <select className="input-field" value={form.class_id} onChange={e => setForm({...form, class_id: e.target.value})} required style={{background: 'rgba(0,0,0,0.2)'}}>
-                            {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.subject})</option>)}
+                        <select className="input-field" value={form.assignment_id} onChange={e => setForm({...form, assignment_id: e.target.value})} required style={{background: 'rgba(0,0,0,0.2)'}}>
+                            {classes.map(c => <option key={c.assignment_id} value={c.assignment_id}>{c.name} ({c.subject})</option>)}
                         </select>
                     </div>
 

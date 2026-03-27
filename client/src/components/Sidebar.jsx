@@ -25,8 +25,6 @@ export default function Sidebar({ user, onLogout }) {
         return [
           { name: 'Tableau de bord', icon: Home, path: '/' },
           { name: 'Gestion Absences', icon: Clock, path: '/absences' },
-          { name: 'Planification', icon: Calendar, path: '/schedule' },
-          { name: 'Config Classes', icon: Settings, path: '/config' },
           { name: 'Sanctions', icon: FileText, path: '/sanctions' },
           { name: 'Vue Globale', icon: Users, path: '/global' }
         ];
@@ -34,6 +32,7 @@ export default function Sidebar({ user, onLogout }) {
         return [
           { name: 'Tableau de bord', icon: Home, path: '/' },
           { name: 'Utlisateurs (CRUD)', icon: Users, path: '/users' },
+          { name: 'Configuration', icon: Settings, path: '/config' },
           { name: 'Sécurité & Logs', icon: Shield, path: '/audit' }  
         ];
       default: return [];

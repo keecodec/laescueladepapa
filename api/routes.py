@@ -6,6 +6,31 @@ from auth import login_required, role_required
 
 api_bp = Blueprint('api_routes', __name__)
 
+
+def ensure_teaching_assignments_table():
+    from db import get_db_connection
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teaching_assignments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                class_id INT NOT NULL,
+                professor_id INT NOT NULL,
+                subject_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_class_subject (class_id, subject_id),
+                FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+                FOREIGN KEY (professor_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+            )
+        """)
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
 # ==========================================
 # 👨‍🎓 ESPACE ÉLÈVE (Visualisation read-only)
 # ==========================================
@@ -114,16 +139,315 @@ def get_absences():
     absences = execute_query(query, (student_id,), fetch_all=True)
     return jsonify(absences), 200
 
+@api_bp.route('/student/sanctions', methods=['GET'])
+@login_required
+@role_required('student')
+def get_student_sanctions():
+    student_id = session['user_id']
+    query = """
+        SELECT type, reason, DATE_FORMAT(date, '%d/%m/%Y') as date
+        FROM sanctions
+        WHERE student_id = %s
+        ORDER BY date DESC, id DESC
+    """
+    sanctions = execute_query(query, (student_id,), fetch_all=True)
+    return jsonify(sanctions), 200
+
 # ==========================================
 # ⚙️ ESPACE ADMINSYS (Configuration & CRUD)
 # ==========================================
 
-@api_bp.route('/admin/classes', methods=['GET'])
+@api_bp.route('/admin/classes', methods=['GET', 'POST'])
 @login_required
 @role_required('admin')
 def get_classes():
+    if request.method == 'POST':
+        data = request.get_json()
+        name = (data.get('name') or '').strip()
+        level = (data.get('level') or '').strip()
+
+        if not name:
+            return jsonify({"error": "Le nom de la classe est obligatoire."}), 400
+
+        existing = execute_query("SELECT id FROM classes WHERE name = %s", (name,), fetch_one=True)
+        if existing:
+            return jsonify({"error": "Cette classe existe deja."}), 400
+
+        execute_query(
+            "INSERT INTO classes (name, level) VALUES (%s, %s)",
+            (name, level or None),
+            commit=True
+        )
+
+        ip_addr = request.remote_addr or 'unknown'
+        execute_query(
+            "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+            (session['user_id'], name, "CLASS_CREATED", ip_addr),
+            commit=True
+        )
+        return jsonify({"message": f"Classe '{name}' creee avec succes."}), 201
+
     classes_list = execute_query("SELECT id, name, level FROM classes ORDER BY name", fetch_all=True)
     return jsonify(classes_list), 200
+
+@api_bp.route('/admin/subjects', methods=['GET', 'POST'])
+@login_required
+@role_required('admin')
+def manage_subjects():
+    if request.method == 'POST':
+        data = request.get_json()
+        name = (data.get('name') or '').strip()
+
+        if not name:
+            return jsonify({"error": "Le nom de la matiere est obligatoire."}), 400
+
+        existing = execute_query("SELECT id FROM subjects WHERE name = %s", (name,), fetch_one=True)
+        if existing:
+            return jsonify({"error": "Cette matiere existe deja."}), 400
+
+        execute_query(
+            "INSERT INTO subjects (name) VALUES (%s)",
+            (name,),
+            commit=True
+        )
+
+        ip_addr = request.remote_addr or 'unknown'
+        execute_query(
+            "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+            (session['user_id'], name, "SUBJECT_CREATED", ip_addr),
+            commit=True
+        )
+        return jsonify({"message": f"Matiere '{name}' ajoutee au catalogue."}), 201
+
+    subjects = execute_query("SELECT id, name FROM subjects ORDER BY name", fetch_all=True)
+    return jsonify(subjects), 200
+
+@api_bp.route('/admin/dashboard', methods=['GET'])
+@login_required
+@role_required('admin')
+def get_admin_dashboard():
+    ensure_teaching_assignments_table()
+    metrics = execute_query("""
+        SELECT
+            (SELECT COUNT(*) FROM users) as users_total,
+            (SELECT COUNT(*) FROM users WHERE role = 'student') as students_total,
+            (SELECT COUNT(*) FROM users WHERE role = 'professor') as professors_total,
+            (SELECT COUNT(*) FROM users WHERE role = 'staff') as staff_total,
+            (SELECT COUNT(*) FROM classes) as classes_total,
+            (SELECT COUNT(*) FROM subjects) as subjects_total,
+            (SELECT COUNT(*) FROM teaching_assignments) as assignments_total
+    """, fetch_one=True)
+
+    recent_users = execute_query("""
+        SELECT username, role, DATE_FORMAT(created_at, '%d/%m/%Y %H:%i') as created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 6
+    """, fetch_all=True)
+
+    try:
+        recent_audits = execute_query("""
+            SELECT action, username_attempt, DATE_FORMAT(created_at, '%d/%m/%Y %H:%i') as created_at
+            FROM audit_logs
+            ORDER BY created_at DESC
+            LIMIT 8
+        """, fetch_all=True)
+    except Exception:
+        recent_audits = []
+
+    return jsonify({
+        "metrics": metrics,
+        "recent_users": recent_users,
+        "recent_audits": recent_audits
+    }), 200
+
+@api_bp.route('/admin/professors', methods=['GET'])
+@login_required
+@role_required('admin')
+def get_professors():
+    professors = execute_query("""
+        SELECT id, username
+        FROM users
+        WHERE role = 'professor'
+        ORDER BY username
+    """, fetch_all=True)
+    return jsonify(professors), 200
+
+
+@api_bp.route('/admin/assignments', methods=['GET', 'POST'])
+@login_required
+@role_required('admin')
+def manage_assignments():
+    ensure_teaching_assignments_table()
+
+    if request.method == 'POST':
+        data = request.get_json()
+        class_id = data.get('class_id')
+        professor_id = data.get('professor_id')
+        subject_id = data.get('subject_id')
+
+        if not all([class_id, professor_id, subject_id]):
+            return jsonify({"error": "Classe, professeur et matiere sont obligatoires."}), 400
+
+        existing = execute_query(
+            "SELECT id FROM teaching_assignments WHERE class_id = %s AND subject_id = %s",
+            (class_id, subject_id),
+            fetch_one=True
+        )
+        if existing:
+            return jsonify({"error": "Cette matiere est deja affectee a une classe."}), 400
+
+        execute_query(
+            "INSERT INTO teaching_assignments (class_id, professor_id, subject_id) VALUES (%s, %s, %s)",
+            (class_id, professor_id, subject_id),
+            commit=True
+        )
+
+        ip_addr = request.remote_addr or 'unknown'
+        execute_query(
+            "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+            (session['user_id'], f"class:{class_id}/subject:{subject_id}", "ASSIGNMENT_CREATED", ip_addr),
+            commit=True
+        )
+        return jsonify({"message": "Affectation pedagogique enregistree."}), 201
+
+    assignments = execute_query("""
+        SELECT
+            ta.id,
+            c.id as class_id,
+            c.name as class_name,
+            s.id as subject_id,
+            s.name as subject_name,
+            u.id as professor_id,
+            u.username as professor_username
+        FROM teaching_assignments ta
+        JOIN classes c ON c.id = ta.class_id
+        JOIN subjects s ON s.id = ta.subject_id
+        JOIN users u ON u.id = ta.professor_id
+        ORDER BY c.name, s.name
+    """, fetch_all=True)
+    return jsonify(assignments), 200
+
+
+@api_bp.route('/admin/assignments/<int:assignment_id>', methods=['DELETE'])
+@login_required
+@role_required('admin')
+def delete_assignment(assignment_id):
+    ensure_teaching_assignments_table()
+    existing = execute_query("SELECT id FROM teaching_assignments WHERE id = %s", (assignment_id,), fetch_one=True)
+    if not existing:
+        return jsonify({"error": "Affectation introuvable."}), 404
+
+    execute_query("DELETE FROM teaching_assignments WHERE id = %s", (assignment_id,), commit=True)
+
+    ip_addr = request.remote_addr or 'unknown'
+    execute_query(
+        "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+        (session['user_id'], f"assignment:{assignment_id}", "ASSIGNMENT_DELETED", ip_addr),
+        commit=True
+    )
+    return jsonify({"message": "Affectation supprimee."}), 200
+
+@api_bp.route('/admin/schedules', methods=['GET', 'POST'])
+@login_required
+@role_required('admin')
+def manage_schedules():
+    ensure_teaching_assignments_table()
+    if request.method == 'POST':
+        data = request.get_json()
+        class_id = data.get('class_id')
+        professor_id = data.get('professor_id')
+        subject_id = data.get('subject_id')
+        room = (data.get('room') or '').strip()
+        day_of_week = data.get('day_of_week')
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        week_type = data.get('week_type', 'Toutes')
+
+        allowed_days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+        allowed_week_types = ['A', 'B', 'Toutes']
+
+        if not all([class_id, professor_id, subject_id, room, day_of_week, start_time, end_time]):
+            return jsonify({"error": "Tous les champs du creneau sont obligatoires."}), 400
+
+        if day_of_week not in allowed_days:
+            return jsonify({"error": "Jour invalide."}), 400
+
+        if week_type not in allowed_week_types:
+            return jsonify({"error": "Type de semaine invalide."}), 400
+
+        assignment = execute_query(
+            "SELECT id FROM teaching_assignments WHERE class_id = %s AND subject_id = %s",
+            (class_id, subject_id),
+            fetch_one=True
+        )
+        if assignment:
+            execute_query(
+                "UPDATE teaching_assignments SET professor_id = %s WHERE id = %s",
+                (professor_id, assignment['id']),
+                commit=True
+            )
+        else:
+            execute_query(
+                "INSERT INTO teaching_assignments (class_id, professor_id, subject_id) VALUES (%s, %s, %s)",
+                (class_id, professor_id, subject_id),
+                commit=True
+            )
+
+        execute_query(
+            """
+            INSERT INTO schedules (class_id, professor_id, subject_id, room, day_of_week, start_time, end_time, week_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (class_id, professor_id, subject_id, room, day_of_week, start_time, end_time, week_type),
+            commit=True
+        )
+
+        ip_addr = request.remote_addr or 'unknown'
+        execute_query(
+            "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+            (session['user_id'], f"class:{class_id}", "SCHEDULE_CREATED", ip_addr),
+            commit=True
+        )
+
+        return jsonify({"message": "Creneau ajoute a l'emploi du temps."}), 201
+
+    schedules = execute_query("""
+        SELECT
+            sch.id,
+            c.name as class_name,
+            u.username as professor_username,
+            s.name as subject_name,
+            sch.room,
+            sch.day_of_week,
+            TIME_FORMAT(sch.start_time, '%H:%i') as start_time,
+            TIME_FORMAT(sch.end_time, '%H:%i') as end_time,
+            sch.week_type
+        FROM schedules sch
+        JOIN classes c ON c.id = sch.class_id
+        JOIN users u ON u.id = sch.professor_id
+        JOIN subjects s ON s.id = sch.subject_id
+        ORDER BY FIELD(sch.day_of_week, 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'), sch.start_time, c.name
+    """, fetch_all=True)
+    return jsonify(schedules), 200
+
+@api_bp.route('/admin/schedules/<int:schedule_id>', methods=['DELETE'])
+@login_required
+@role_required('admin')
+def delete_schedule(schedule_id):
+    existing = execute_query("SELECT id FROM schedules WHERE id = %s", (schedule_id,), fetch_one=True)
+    if not existing:
+        return jsonify({"error": "Creneau introuvable."}), 404
+
+    execute_query("DELETE FROM schedules WHERE id = %s", (schedule_id,), commit=True)
+
+    ip_addr = request.remote_addr or 'unknown'
+    execute_query(
+        "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+        (session['user_id'], f"schedule:{schedule_id}", "SCHEDULE_DELETED", ip_addr),
+        commit=True
+    )
+    return jsonify({"message": "Creneau supprime."}), 200
 
 @api_bp.route('/admin/users', methods=['GET', 'POST'])
 @login_required
@@ -243,27 +567,106 @@ def get_prof_schedule():
     schedule = execute_query(query, (prof_id,), fetch_all=True)
     return jsonify(schedule), 200
 
+@api_bp.route('/professor/dashboard', methods=['GET'])
+@login_required
+@role_required('professor')
+def get_prof_dashboard():
+    ensure_teaching_assignments_table()
+    prof_id = session['user_id']
+
+    metrics = execute_query("""
+        SELECT
+            COUNT(DISTINCT sch.class_id) as classes_total,
+            COUNT(DISTINCT CASE WHEN u.role = 'student' THEN u.id END) as students_total
+        FROM schedules sch
+        LEFT JOIN user_classes uc ON uc.class_id = sch.class_id
+        LEFT JOIN users u ON u.id = uc.user_id
+        WHERE sch.professor_id = %s
+    """, (prof_id,), fetch_one=True)
+
+    grade_stats = execute_query("""
+        SELECT COUNT(*) as grades_total
+        FROM grades
+        WHERE professor_id = %s
+    """, (prof_id,), fetch_one=True)
+
+    homework_stats = execute_query("""
+        SELECT COUNT(*) as homework_total
+        FROM textbook
+        WHERE professor_id = %s AND is_homework = TRUE
+    """, (prof_id,), fetch_one=True)
+
+    next_courses = execute_query("""
+        SELECT c.name as class_name, s.name as subject, sch.day_of_week, TIME_FORMAT(sch.start_time, '%H:%i') as start_time, TIME_FORMAT(sch.end_time, '%H:%i') as end_time, sch.room, sch.week_type
+        FROM schedules sch
+        JOIN classes c ON c.id = sch.class_id
+        JOIN subjects s ON s.id = sch.subject_id
+        WHERE sch.professor_id = %s
+        ORDER BY FIELD(sch.day_of_week, 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'), sch.start_time
+        LIMIT 6
+    """, (prof_id,), fetch_all=True)
+
+    recent_grades = execute_query("""
+        SELECT u.username as student_username, s.name as subject, CAST(g.grade AS CHAR) as grade, DATE_FORMAT(g.created_at, '%d/%m/%Y') as date
+        FROM grades g
+        JOIN users u ON u.id = g.student_id
+        JOIN subjects s ON s.id = g.subject_id
+        WHERE g.professor_id = %s
+        ORDER BY g.created_at DESC
+        LIMIT 6
+    """, (prof_id,), fetch_all=True)
+
+    recent_homework = execute_query("""
+        SELECT c.name as class_name, s.name as subject, DATE_FORMAT(date_due, '%d/%m/%Y') as date_due, content
+        FROM textbook t
+        JOIN classes c ON c.id = t.class_id
+        JOIN subjects s ON s.id = t.subject_id
+        WHERE t.professor_id = %s AND t.is_homework = TRUE
+        ORDER BY t.created_at DESC
+        LIMIT 5
+    """, (prof_id,), fetch_all=True)
+
+    return jsonify({
+        "metrics": {
+            **(metrics or {}),
+            "grades_total": grade_stats['grades_total'] if grade_stats else 0,
+            "homework_total": homework_stats['homework_total'] if homework_stats else 0
+        },
+        "next_courses": next_courses,
+        "recent_grades": recent_grades,
+        "recent_homework": recent_homework
+    }), 200
+
 @api_bp.route('/professor/classes', methods=['GET'])
 @login_required
 @role_required('professor')
 def get_prof_classes():
+    ensure_teaching_assignments_table()
     prof_id = session['user_id']
     query = """
-        SELECT c.id, c.name, c.level, s.name as subject
-        FROM classes c
-        JOIN user_classes uc ON c.id = uc.class_id
-        JOIN schedules sch ON sch.class_id = c.id AND sch.professor_id = %s
-        JOIN subjects s ON sch.subject_id = s.id
-        WHERE uc.user_id = %s
-        GROUP BY c.id, s.id
+        SELECT ta.id as assignment_id, c.id, c.name, c.level, s.id as subject_id, s.name as subject
+        FROM teaching_assignments ta
+        JOIN classes c ON c.id = ta.class_id
+        JOIN subjects s ON s.id = ta.subject_id
+        WHERE ta.professor_id = %s
+        ORDER BY c.name, s.name
     """
-    classes = execute_query(query, (prof_id, prof_id), fetch_all=True)
+    classes = execute_query(query, (prof_id,), fetch_all=True)
     return jsonify(classes), 200
 
 @api_bp.route('/professor/students/<int:class_id>', methods=['GET'])
 @login_required
 @role_required('professor')
 def get_prof_students(class_id):
+    ensure_teaching_assignments_table()
+    assignment = execute_query(
+        "SELECT id FROM teaching_assignments WHERE class_id = %s AND professor_id = %s LIMIT 1",
+        (class_id, session['user_id']),
+        fetch_one=True
+    )
+    if not assignment:
+        return jsonify({"error": "Classe non accessible pour ce professeur."}), 403
+
     query = """
         SELECT u.id, u.username
         FROM users u
@@ -278,19 +681,28 @@ def get_prof_students(class_id):
 @login_required
 @role_required('professor')
 def add_grade():
+    ensure_teaching_assignments_table()
     prof_id = session['user_id']
     data = request.get_json()
+    assignment_id = data.get('assignment_id')
     student_id = data.get('student_id')
-    class_id = data.get('class_id')
     grade = data.get('grade')
     comments = data.get('comments', '')
-    
-    sub_query = "SELECT subject_id FROM schedules WHERE professor_id = %s AND class_id = %s LIMIT 1"
-    sub_res = execute_query(sub_query, (prof_id, class_id), fetch_one=True)
-    if not sub_res:
-        return jsonify({"error": "Vous n'êtes pas assigné à cette classe."}), 403
-        
-    subject_id = sub_res['subject_id']
+
+    assignment = execute_query(
+        """
+        SELECT id, class_id, subject_id
+        FROM teaching_assignments
+        WHERE id = %s AND professor_id = %s
+        """,
+        (assignment_id, prof_id),
+        fetch_one=True
+    )
+    if not assignment:
+        return jsonify({"error": "Vous n'etes pas affecte a cette matiere pour cette classe."}), 403
+
+    class_id = assignment['class_id']
+    subject_id = assignment['subject_id']
     
     try:
         grade = float(grade)
@@ -309,18 +721,27 @@ def add_grade():
 @login_required
 @role_required('professor')
 def add_homework():
+    ensure_teaching_assignments_table()
     prof_id = session['user_id']
     data = request.get_json()
-    class_id = data.get('class_id')
+    assignment_id = data.get('assignment_id')
     date_due = data.get('date_due')
     content = data.get('content')
-    
-    sub_query = "SELECT subject_id FROM schedules WHERE professor_id = %s AND class_id = %s LIMIT 1"
-    sub_res = execute_query(sub_query, (prof_id, class_id), fetch_one=True)
-    if not sub_res:
-        return jsonify({"error": "Affectation invalide académiquement."}), 403
-        
-    subject_id = sub_res['subject_id']
+
+    assignment = execute_query(
+        """
+        SELECT id, class_id, subject_id
+        FROM teaching_assignments
+        WHERE id = %s AND professor_id = %s
+        """,
+        (assignment_id, prof_id),
+        fetch_one=True
+    )
+    if not assignment:
+        return jsonify({"error": "Affectation invalide academiquement."}), 403
+
+    class_id = assignment['class_id']
+    subject_id = assignment['subject_id']
     
     execute_query(
         "INSERT INTO textbook (class_id, professor_id, subject_id, date_due, content, is_homework) VALUES (%s, %s, %s, %s, %s, TRUE)",
@@ -348,6 +769,29 @@ def get_all_students():
     students = execute_query(query, fetch_all=True)
     return jsonify(students), 200
 
+@api_bp.route('/staff/absences', methods=['GET'])
+@login_required
+@role_required('staff')
+def get_staff_absences():
+    query = """
+        SELECT
+            a.id,
+            DATE_FORMAT(a.date, '%d/%m/%Y') as date,
+            a.is_late,
+            a.justified,
+            a.comments,
+            u.username as student_username,
+            c.name as class_name
+        FROM absences a
+        JOIN users u ON u.id = a.student_id
+        LEFT JOIN user_classes uc ON uc.user_id = u.id
+        LEFT JOIN classes c ON c.id = uc.class_id
+        ORDER BY a.date DESC, a.id DESC
+        LIMIT 50
+    """
+    absences = execute_query(query, fetch_all=True)
+    return jsonify(absences), 200
+
 @api_bp.route('/staff/absences', methods=['POST'])
 @login_required
 @role_required('staff')
@@ -368,3 +812,136 @@ def add_absence():
         commit=True
     )
     return jsonify({"message": "Incident comportemental / retard ajouté stricto sensu."}), 201
+
+@api_bp.route('/staff/sanctions', methods=['GET'])
+@login_required
+@role_required('staff')
+def get_sanctions():
+    query = """
+        SELECT
+            s.id,
+            stu.username AS student_username,
+            c.name AS class_name,
+            s.type,
+            s.reason,
+            DATE_FORMAT(s.date, '%d/%m/%Y') AS date,
+            staff.username AS staff_username
+        FROM sanctions s
+        JOIN users stu ON s.student_id = stu.id
+        LEFT JOIN user_classes uc ON uc.user_id = stu.id
+        LEFT JOIN classes c ON c.id = uc.class_id
+        JOIN users staff ON s.staff_id = staff.id
+        ORDER BY s.date DESC, s.id DESC
+        LIMIT 50
+    """
+    sanctions = execute_query(query, fetch_all=True)
+    return jsonify(sanctions), 200
+
+@api_bp.route('/staff/sanctions', methods=['POST'])
+@login_required
+@role_required('staff')
+def add_sanction():
+    data = request.get_json()
+    student_id = data.get('student_id')
+    sanction_type = data.get('type')
+    reason = (data.get('reason') or '').strip()
+    sanction_date = data.get('date')
+
+    allowed_types = ['Observation', 'Avertissement', 'Retenue', 'Exclusion']
+
+    if not student_id or not sanction_date or not reason:
+        return jsonify({"error": "L'élève, la date et le motif sont obligatoires."}), 400
+
+    if sanction_type not in allowed_types:
+        return jsonify({"error": "Type de sanction invalide."}), 400
+
+    student = execute_query(
+        "SELECT id, username FROM users WHERE id = %s AND role = 'student'",
+        (student_id,),
+        fetch_one=True
+    )
+    if not student:
+        return jsonify({"error": "Élève introuvable."}), 404
+
+    execute_query(
+        "INSERT INTO sanctions (student_id, staff_id, type, reason, date) VALUES (%s, %s, %s, %s, %s)",
+        (student_id, session['user_id'], sanction_type, reason, sanction_date),
+        commit=True
+    )
+
+    ip_addr = request.remote_addr or 'unknown'
+    execute_query(
+        "INSERT INTO audit_logs (user_id, username_attempt, action, ip_address) VALUES (%s, %s, %s, %s)",
+        (session['user_id'], student['username'], f"SANCTION_CREATED_{sanction_type.upper()}", ip_addr),
+        commit=True
+    )
+
+    return jsonify({"message": f"Sanction '{sanction_type}' ajoutee au dossier de {student['username']}."}), 201
+
+@api_bp.route('/staff/dashboard', methods=['GET'])
+@login_required
+@role_required('staff')
+def get_staff_dashboard():
+    metrics = execute_query("""
+        SELECT
+            (SELECT COUNT(*) FROM absences) as absences_total,
+            (SELECT COUNT(*) FROM absences WHERE justified = FALSE) as unjustified_total,
+            (SELECT COUNT(*) FROM sanctions) as sanctions_total,
+            (SELECT COUNT(*) FROM absences WHERE date = CURDATE()) + (SELECT COUNT(*) FROM sanctions WHERE date = CURDATE()) as incidents_today
+    """, fetch_one=True)
+
+    recent_absences = execute_query("""
+        SELECT
+            u.username as student_username,
+            c.name as class_name,
+            DATE_FORMAT(a.date, '%d/%m/%Y') as date,
+            a.is_late,
+            a.justified,
+            a.comments
+        FROM absences a
+        JOIN users u ON u.id = a.student_id
+        LEFT JOIN user_classes uc ON uc.user_id = u.id
+        LEFT JOIN classes c ON c.id = uc.class_id
+        ORDER BY a.date DESC, a.id DESC
+        LIMIT 6
+    """, fetch_all=True)
+
+    recent_sanctions = execute_query("""
+        SELECT
+            u.username as student_username,
+            c.name as class_name,
+            s.type,
+            s.reason,
+            DATE_FORMAT(s.date, '%d/%m/%Y') as date
+        FROM sanctions s
+        JOIN users u ON u.id = s.student_id
+        LEFT JOIN user_classes uc ON uc.user_id = u.id
+        LEFT JOIN classes c ON c.id = uc.class_id
+        ORDER BY s.date DESC, s.id DESC
+        LIMIT 6
+    """, fetch_all=True)
+
+    top_students = execute_query("""
+        SELECT
+            u.username,
+            c.name as class_name,
+            SUM(events.total) as incidents_total
+        FROM (
+            SELECT student_id, COUNT(*) as total FROM absences GROUP BY student_id
+            UNION ALL
+            SELECT student_id, COUNT(*) as total FROM sanctions GROUP BY student_id
+        ) events
+        JOIN users u ON u.id = events.student_id
+        LEFT JOIN user_classes uc ON uc.user_id = u.id
+        LEFT JOIN classes c ON c.id = uc.class_id
+        GROUP BY u.id, u.username, c.name
+        ORDER BY incidents_total DESC, u.username ASC
+        LIMIT 5
+    """, fetch_all=True)
+
+    return jsonify({
+        "metrics": metrics,
+        "recent_absences": recent_absences,
+        "recent_sanctions": recent_sanctions,
+        "top_students": top_students
+    }), 200

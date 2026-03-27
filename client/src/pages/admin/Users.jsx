@@ -21,7 +21,7 @@ export default function Users() {
       if (cRes.data.length > 0) {
           setForm(f => ({...f, class_id: cRes.data[0].id}));
       }
-    } catch (e) {
+    } catch {
       setError("Accès refusé ou instabilité réseau.");
     } finally {
       setLoading(false);

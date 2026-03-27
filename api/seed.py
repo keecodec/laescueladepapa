@@ -29,6 +29,19 @@ def seed_database():
     try:
         ddl_cursor = conn.cursor()
         ddl_cursor.execute("ALTER TABLE schedules ADD COLUMN week_type ENUM('A', 'B', 'Toutes') DEFAULT 'Toutes'")
+        ddl_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teaching_assignments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                class_id INT NOT NULL,
+                professor_id INT NOT NULL,
+                subject_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_class_subject (class_id, subject_id),
+                FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+                FOREIGN KEY (professor_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+            )
+        """)
         ddl_cursor.close()
     except Exception:
         pass # La colonne existe déjà
@@ -100,6 +113,13 @@ def seed_database():
                 cursor.execute(
                     "INSERT INTO schedules (class_id, professor_id, subject_id, room, day_of_week, start_time, end_time, week_type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                     sd
+                )
+
+            assigned_subjects = sorted({sd[2] for sd in schedules_data})
+            for subject_id in assigned_subjects:
+                cursor.execute(
+                    "INSERT IGNORE INTO teaching_assignments (class_id, professor_id, subject_id) VALUES (%s, %s, %s)",
+                    (1, p_id, subject_id)
                 )
 
     except Exception as e:

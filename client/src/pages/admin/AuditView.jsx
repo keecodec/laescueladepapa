@@ -11,7 +11,7 @@ export default function AuditView() {
       try {
         const res = await api.get('/admin/audit');
         setLogs(res.data);
-      } catch (e) {
+      } catch {
         console.error("Problème d'accès à l'API d'audit");
       } finally {
         setLoading(false);

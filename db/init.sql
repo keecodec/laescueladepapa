@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS user_classes (
     PRIMARY KEY (user_id, class_id)
 );
 
+CREATE TABLE IF NOT EXISTS teaching_assignments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    class_id INT NOT NULL,
+    professor_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_class_subject (class_id, subject_id),
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+    FOREIGN KEY (professor_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+);
+
 -- 3. Fonctionnement "Pronote" : Notes, Absences, Emplois du temps
 CREATE TABLE IF NOT EXISTS grades (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -56,6 +68,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     day_of_week ENUM('Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'),
     start_time TIME,
     end_time TIME,
+    week_type ENUM('A', 'B', 'Toutes') DEFAULT 'Toutes',
     FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
     FOREIGN KEY (professor_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (subject_id) REFERENCES subjects(id)

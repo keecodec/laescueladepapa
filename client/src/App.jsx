@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { BookOpen, CheckSquare, Calendar, Clock, Users as UsersIcon } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Sidebar from './components/Sidebar';
@@ -9,10 +9,15 @@ import Users from './pages/admin/Users';
 import HomeworkView from './pages/student/HomeworkView';
 import ScheduleView from './pages/student/ScheduleView';
 import GradesView from './pages/student/GradesView';
+import StudentDiscipline from './pages/student/StudentDiscipline';
 import AuditView from './pages/admin/AuditView';
 import ProfGrades from './pages/professor/ProfGrades';
 import ProfHomework from './pages/professor/ProfHomework';
+import ProfClasses from './pages/professor/ProfClasses';
+import AdminConfig from './pages/admin/AdminConfig';
 import StaffAbsences from './pages/staff/StaffAbsences';
+import StaffGlobal from './pages/staff/StaffGlobal';
+import StaffSanctions from './pages/staff/StaffSanctions';
 import api from './api';
 
 export default function App() {
@@ -24,7 +29,7 @@ export default function App() {
       try {
         const res = await api.get('/auth/me');
         setUser(res.data);
-      } catch (err) {
+      } catch {
         setUser(null);
       } finally {
         setLoading(false);
@@ -54,7 +59,9 @@ export default function App() {
              const { data } = await api.get('/csrf-token');
              api.defaults.headers.common['X-CSRFToken'] = data.csrf_token;
              await api.post('/auth/logout');
-          } catch(e) {}
+          } catch (error) {
+             console.error('Logout request failed:', error);
+          }
           setUser(null);
         }} />
         <main style={{ marginLeft: '280px', flex: 1, padding: '2.5rem', overflowY: 'auto', background: 'var(--background)' }}>
@@ -91,20 +98,31 @@ export default function App() {
 
         <Route path="/schedule" element={
           <ProtectedLayout>
-             <ScheduleView user={user} />
+             {user?.role === 'student' || user?.role === 'professor' ? <ScheduleView user={user} /> : <Navigate to="/" />}
+          </ProtectedLayout>
+        } />
+
+        <Route path="/classes" element={
+          <ProtectedLayout>
+             {user?.role === 'professor' ? <ProfClasses /> : <Navigate to="/" />}
           </ProtectedLayout>
         } />
 
         <Route path="/absences" element={
           <ProtectedLayout>
-             {user?.role === 'staff' ? <StaffAbsences /> : (
-                 <DataListView title="Vie Scolaire : Bilan Disciplinaire" endpoint="/student/absences" icon={Clock} columns={[
-                  {key: 'date', label: 'Date'},
-                  {key: 'is_late', label: 'Retard ?'},
-                  {key: 'justified', label: 'Billet de justification ?'},
-                  {key: 'comments', label: 'Commentaires de la Vie Scolaire'}
-                ]} />
-             )}
+             {user?.role === 'staff' ? <StaffAbsences /> : user?.role === 'student' ? <StudentDiscipline /> : <Navigate to="/" />}
+          </ProtectedLayout>
+        } />
+
+        <Route path="/sanctions" element={
+          <ProtectedLayout>
+             {user?.role === 'staff' ? <StaffSanctions /> : <Navigate to="/" />}
+          </ProtectedLayout>
+        } />
+
+        <Route path="/global" element={
+          <ProtectedLayout>
+             {user?.role === 'staff' ? <StaffGlobal /> : <Navigate to="/" />}
           </ProtectedLayout>
         } />
 
@@ -112,6 +130,7 @@ export default function App() {
             VUES ADMINSYS 
         ====================== */}
         <Route path="/users" element={<ProtectedLayout><Users /></ProtectedLayout>} />
+        <Route path="/config" element={<ProtectedLayout>{user?.role === 'admin' ? <AdminConfig /> : <Navigate to="/" />}</ProtectedLayout>} />
         <Route path="/audit" element={<ProtectedLayout><AuditView /></ProtectedLayout>} />
 
         <Route path="*" element={<Navigate to="/" />} />

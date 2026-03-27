@@ -20,7 +20,7 @@ export default function ScheduleView({ user }) {
       }
     };
     fetchSchedule();
-  }, []);
+  }, [user?.role]);
 
   // Génération dynamique des dates
   const getWeekBounds = (offset) => {

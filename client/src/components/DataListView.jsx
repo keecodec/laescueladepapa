@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
 
-export default function DataListView({ title, endpoint, icon: Icon, columns }) {
+export default function DataListView({ title, endpoint, icon, columns }) {
+  const Icon = icon;
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

@@ -4,7 +4,7 @@ import { BookOpen, Check, AlertCircle, Users } from 'lucide-react';
 
 export default function ProfGrades() {
   const [classes, setClasses] = useState([]);
-  const [activeClass, setActiveClass] = useState(null);
+  const [activeAssignment, setActiveAssignment] = useState(null);
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState({ grade: '', comments: '' });
   const [msg, setMsg] = useState(null);
@@ -14,13 +14,13 @@ export default function ProfGrades() {
     api.get('/professor/classes').then(res => setClasses(res.data)).catch(e => console.error(e));
   }, []);
 
-  const selectClass = async (cid) => {
-    setActiveClass(cid);
+  const selectClass = async (assignment) => {
+    setActiveAssignment(assignment);
     setMsg(null); setErr(null);
     try {
-        const res = await api.get(`/professor/students/${cid}`);
+        const res = await api.get(`/professor/students/${assignment.id}`);
         setStudents(res.data);
-    } catch(e) {
+    } catch {
         setErr("Erreur réseau. Impossible d'afficher la liste d'appel.");
     }
   };
@@ -30,7 +30,7 @@ export default function ProfGrades() {
       setMsg(null); setErr(null);
       try {
           await fetchCsrfToken();
-          const p = { student_id: sid, class_id: activeClass, grade: form[`g_${sid}`], comments: form[`c_${sid}`] };
+          const p = { student_id: sid, assignment_id: activeAssignment?.assignment_id, grade: form[`g_${sid}`], comments: form[`c_${sid}`] };
           const res = await api.post('/professor/grades', p);
           setMsg(res.data.message);
           
@@ -58,7 +58,7 @@ export default function ProfGrades() {
                 <h3 style={{fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}><Users size={18}/> Vos Classes affectées</h3>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
                     {classes.map(c => (
-                        <button key={c.id} onClick={() => selectClass(c.id)} style={{ padding: '1rem', background: activeClass === c.id ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.02)', border: activeClass === c.id ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', fontWeight: activeClass === c.id ? 'bold' : 'normal' }}>
+                        <button key={c.assignment_id} onClick={() => selectClass(c)} style={{ padding: '1rem', background: activeAssignment?.assignment_id === c.assignment_id ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.02)', border: activeAssignment?.assignment_id === c.assignment_id ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', color: 'white', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', fontWeight: activeAssignment?.assignment_id === c.assignment_id ? 'bold' : 'normal' }}>
                             {c.name} <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block'}}>{c.subject}</span>
                         </button>
                     ))}
@@ -68,9 +68,9 @@ export default function ProfGrades() {
 
             <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
                 <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-                    <h3 style={{fontSize: '1.25rem'}}>Grille de saisie interactive {activeClass ? `(${students.length} Élèves concernés)` : ''}</h3>
+                    <h3 style={{fontSize: '1.25rem'}}>Grille de saisie interactive {activeAssignment ? `(${students.length} Élèves concernés)` : ''}</h3>
                 </div>
-                {!activeClass ? (
+                {!activeAssignment ? (
                     <div style={{padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)'}}>Veuillez sélectionner une classe dans le pannel de gauche afin de générer la liste de vos élèves.</div>
                 ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
