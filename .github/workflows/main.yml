@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configuration de Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupération du code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 4. Build Docker (Test d'intégration)
       - name: Démarrage de l'infrastructure Docker
@@ -61,7 +61,7 @@ jobs:
 
       # 5. Dynamic Application Security Testing (DAST)
       - name: Scan DAST (OWASP ZAP Baseline)
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           # Cible l'application React hébergée localement sur le conteneur cible. 
           # Note: l'IP réseau par défaut du host depuis un conteneur docker sous Linux est souvent 172.17.0.1
