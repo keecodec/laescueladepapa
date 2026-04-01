@@ -1,0 +1,283 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* === Apple System Colors (HIG) === */
+  --color-accent:        #007AFF;
+  --color-accent-light:  #409CFF;
+  --color-accent-dark:   #0062CC;
+  --color-accent-50:     rgba(0, 122, 255, 0.08);
+  --color-accent-100:    rgba(0, 122, 255, 0.15);
+
+  --color-student:   #007AFF;
+  --color-professor: #5856D6;
+  --color-staff:     #FF9500;
+  --color-admin:     #FF3B30;
+
+  --color-primary:       #007AFF;
+  --color-primary-hover: #0062CC;
+  --color-secondary:     #5856D6;
+
+  /* === Light Mode Palette (macOS Sonoma) === */
+  --color-bg:             #F2F2F7;
+  --color-bg-secondary:   #FFFFFF;
+  --color-surface:        rgba(255, 255, 255, 0.78);
+  --color-surface-hover:  rgba(255, 255, 255, 0.92);
+  --color-surface-light:  rgba(240, 240, 245, 0.60);
+
+  --color-text:           rgba(0, 0, 0, 0.88);
+  --color-text-secondary: rgba(60, 60, 67, 0.55);
+  --color-text-muted:     rgba(60, 60, 67, 0.30);
+  --color-border:         rgba(0, 0, 0, 0.08);
+  --color-border-light:   rgba(0, 0, 0, 0.04);
+  --color-separator:      rgba(60, 60, 67, 0.10);
+
+  --color-success:  #34C759;
+  --color-error:    #FF3B30;
+  --color-warning:  #FF9500;
+  --color-info:     #5AC8FA;
+
+  /* === Radius (Apple concentricity) === */
+  --radius-xs:  6px;
+  --radius-sm:  8px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  18px;
+  --radius-2xl: 22px;
+
+  /* === Shadows === */
+  --shadow-xs:       0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm:       0 1px 4px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --shadow-md:       0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-card:     0 2px 12px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --shadow-elevated: 0 8px 30px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-sidebar:  2px 0 20px rgba(0, 0, 0, 0.06);
+
+  /* === Easing (Apple spring) === */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+
+  /* === Font (SF Pro style) === */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', monospace;
+
+  /* === Animations === */
+  --animate-fade-in:  fadeIn 0.35s var(--ease-out) forwards;
+  --animate-slide-up: slideUp 0.4s var(--ease-spring) forwards;
+  --animate-scale-in: scaleIn 0.25s var(--ease-spring) forwards;
+  --animate-shimmer:  shimmer 1.8s ease-in-out infinite;
+}
+
+/* === Keyframes === */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* === Global === */
+@layer base {
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.47;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-x: hidden;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+  }
+
+  #root { min-height: 100vh; }
+
+  /* macOS-style thin scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  ::selection {
+    background: rgba(0, 122, 255, 0.20);
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 3px solid rgba(0, 122, 255, 0.50);
+    outline-offset: 2px;
+    border-radius: 5px;
+  }
+}
+
+/* === Utilities === */
+@layer utilities {
+
+  /* ——— macOS Sidebar Glass (like Finder / System Prefs) ——— */
+  .sidebar-glass {
+    background: rgba(246, 246, 246, 0.82);
+    backdrop-filter: blur(30px) saturate(200%);
+    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    border-right: 0.5px solid rgba(0, 0, 0, 0.10);
+  }
+
+  /* ——— macOS Panel Glass (like preference panes, sheets) ——— */
+  .panel-glass {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: 0.5px solid rgba(255, 255, 255, 0.90);
+    box-shadow: var(--shadow-card), inset 0 0.5px 0 rgba(255, 255, 255, 1);
+  }
+
+  /* ——— macOS Card (like System Settings sections) ——— */
+  .mac-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border-radius: 12px;
+    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s var(--ease-smooth);
+  }
+
+  .mac-card:hover {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* ——— White card (solid, no glass) ——— */
+  .white-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ——— macOS Toolbar glass ——— */
+  .toolbar-glass {
+    background: rgba(252, 252, 252, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+  }
+
+  /* ——— Ambient background with colorful orbs (what makes glass work) ——— */
+  .bg-ambient {
+    background-color: #F2F2F7;
+    background-image:
+      radial-gradient(ellipse 55% 45% at 12% 18%, rgba(0, 122, 255, 0.09) 0%, transparent 65%),
+      radial-gradient(ellipse 45% 40% at 88% 82%, rgba(88, 86, 214, 0.07) 0%, transparent 65%),
+      radial-gradient(ellipse 35% 30% at 55% 50%, rgba(52, 199, 89, 0.04) 0%, transparent 65%),
+      radial-gradient(ellipse 30% 25% at 78% 22%, rgba(255, 149, 0, 0.05) 0%, transparent 65%);
+  }
+
+  /* ——— macOS Separator ——— */
+  .mac-separator {
+    height: 0.5px;
+    background: rgba(60, 60, 67, 0.10);
+  }
+
+  /* ——— Material effect (like macOS menu bar) ——— */
+  .material-regular {
+    background: rgba(248, 248, 248, 0.75);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+  }
+
+  /* ——— Nav item active state ——— */
+  .nav-active {
+    background: rgba(0, 122, 255, 0.10);
+    color: #007AFF;
+  }
+
+  .nav-item {
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .nav-item:not(.nav-active):hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  /* ——— Apple-style label (SF Pro caption size) ——— */
+  .label-caption {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.004em;
+    color: rgba(60, 60, 67, 0.50);
+    text-transform: uppercase;
+  }
+
+  /* ——— Grade colors ——— */
+  .grade-excellent { color: #34C759; }
+  .grade-good      { color: #007AFF; }
+  .grade-average   { color: #FF9500; }
+  .grade-poor      { color: #FF3B30; }
+
+  /* ——— Skeleton shimmer ——— */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.04) 25%,
+      rgba(0, 0, 0, 0.08) 50%,
+      rgba(0, 0, 0, 0.04) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    border-radius: 8px;
+  }
+
+  /* ——— Animation utility classes ——— */
+  .animate-fade-in  { animation: var(--animate-fade-in); }
+  .animate-slide-up { animation: var(--animate-slide-up); }
+  .animate-scale-in { animation: var(--animate-scale-in); }
+  .animate-spin     { animation: spin 1s linear infinite; }
+
+  /* ——— Legacy compat ——— */
+  .glass      { background: rgba(255, 255, 255, 0.78); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); border: 0.5px solid rgba(0,0,0,0.06); border-radius: 12px; }
+  .glass-card { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 0.5px solid rgba(0,0,0,0.06); border-radius: 12px; box-shadow: var(--shadow-card); }
+  .bg-mesh    { background-color: #F2F2F7; background-image: radial-gradient(ellipse at 20% 20%, rgba(0, 122, 255, 0.07) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(88, 86, 214, 0.06) 0%, transparent 50%); }
+  .apple-separator { height: 0.5px; background: rgba(60, 60, 67, 0.10); }
+  .text-gradient { color: #007AFF; font-weight: 600; }
+}
+
+/* === Reduced Motion === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
