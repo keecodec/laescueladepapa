@@ -279,7 +279,7 @@ def register_honeypots(app):
                 commit=True
             )
         except Exception:
-            pass
+            logger.debug("Audit log write failed")
 
         # Tarpit sévère — ralentir le scanner
         time.sleep(3)
@@ -294,7 +294,7 @@ def register_honeypots(app):
         return jsonify({"error": "Unauthorized"}), 401
 
     for path in HONEYPOT_PATHS:
-        endpoint_name = f"honeypot_{hashlib.md5(path.encode()).hexdigest()[:8]}"
+        endpoint_name = f"honeypot_{hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()[:8]}"
         app.add_url_rule(
             path,
             endpoint=endpoint_name,
@@ -340,7 +340,7 @@ def check_session_anomaly():
                 commit=True
             )
         except Exception:
-            pass
+            logger.debug("Audit log write failed")
         return True
 
     if session.get('session_ua_hash') != ua_hash:
@@ -360,7 +360,7 @@ def check_session_anomaly():
                 commit=True
             )
         except Exception:
-            pass
+            logger.debug("Audit log write failed")
         return True
 
     return False
@@ -420,7 +420,7 @@ def init_anti_ai(app):
                     commit=True
                 )
             except Exception:
-                pass
+                logger.debug("Audit log write failed")
             time.sleep(2)
             return jsonify({"error": "Requête non autorisée."}), 403
 

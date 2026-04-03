@@ -47,7 +47,7 @@ def seed_database():
         """)
         ddl_cursor.close()
     except Exception:
-        pass # La colonne existe déjà
+        logger.debug("Column/table already exists, skipping DDL")
         
     logger.info("Hashing passwords with bcrypt")
     for username, plain_pass, role in users:
