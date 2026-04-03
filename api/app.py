@@ -14,6 +14,7 @@ from flask_talisman import Talisman
 from auth import auth_bp
 from routes import api_bp
 from extensions import limiter
+from anti_ai import init_anti_ai
 
 app = Flask(__name__)
 
@@ -43,11 +44,16 @@ csp = {
     'base-uri': "'self'",
     'form-action': "'self'",
 }
+is_dev = os.environ.get('FLASK_ENV') == 'development'
 talisman = Talisman(
     app,
-    force_https=os.environ.get('FLASK_ENV') != 'development',
+    force_https=not is_dev,
+    session_cookie_secure=not is_dev,
     content_security_policy=csp,
 )
+
+# ══ Anti-AI Security Layer ══
+init_anti_ai(app)
 
 # Route exposée pour fournir le token CSRF à l'application SPA React
 @app.route('/api/csrf-token', methods=['GET'])
